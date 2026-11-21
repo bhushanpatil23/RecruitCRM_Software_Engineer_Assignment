@@ -3,8 +3,10 @@ package com.recruitcrm.candidate.services;
 import com.recruitcrm.candidate.dtos.CandidateRequestDto;
 import com.recruitcrm.candidate.dtos.CandidateResponseDto;
 import com.recruitcrm.candidate.dtos.CandidatePatchDto;
+import com.recruitcrm.candidate.dtos.CandidateSearchDto;
 import com.recruitcrm.candidate.entities.Candidate;
 import com.recruitcrm.candidate.repositories.CandidateRepository;
+import com.recruitcrm.candidate.repositories.CandidateSpecifications;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.beans.SimpleTypeConverter;
+import org.springframework.data.jpa.domain.Specification;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
@@ -135,4 +138,42 @@ public class CandidateService {
         Candidate updatedCandidate = candidateRepository.save(candidate);
         return mapper.map(updatedCandidate, CandidateResponseDto.class);
     }
+
+    public List<CandidateResponseDto> filterCandidates(CandidateSearchDto searchDto) {
+
+        if (searchDto.getExperienceMin() != null
+                && searchDto.getExperienceMax() != null
+                && searchDto.getExperienceMin() > searchDto.getExperienceMax()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "experienceMin cannot be greater than experienceMax");
+        }
+
+        if (searchDto.getSalaryMin() != null
+                && searchDto.getSalaryMax() != null
+                && searchDto.getSalaryMin() > searchDto.getSalaryMax()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "salaryMin cannot be greater than salaryMax");
+        }
+
+
+        Specification<Candidate> specification = Specification
+                .<Candidate>unrestricted()
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getFirstName(), "firstName"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getLastName(), "lastName"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getEmail(), "email"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getSkills(), "skills"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getCurrentCompany(), "currentCompany"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getCurrentLocation(), "currentLocation"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getPreferredLocation(), "preferredLocation"))
+                .and(CandidateSpecifications.hasExperienceGreaterThanOrEqualTo(searchDto.getExperienceMin()))
+                .and(CandidateSpecifications.hasExperienceLessThanOrEqualTo(searchDto.getExperienceMax()))
+                .and(CandidateSpecifications.hasExpectedSalaryGreaterThanOrEqualTo(searchDto.getSalaryMin()))
+                .and(CandidateSpecifications.hasExpectedSalaryLessThanOrEqualTo(searchDto.getSalaryMax()))
+                .and(CandidateSpecifications.hasNoticePeriodLessThanOrEqualTo(searchDto.getNoticePeriodMax()));
+
+        return candidateRepository.findAll(specification).stream()
+                .map(candidate -> mapper.map(candidate, CandidateResponseDto.class))
+                .collect(Collectors.toList());
+    }
+
 }

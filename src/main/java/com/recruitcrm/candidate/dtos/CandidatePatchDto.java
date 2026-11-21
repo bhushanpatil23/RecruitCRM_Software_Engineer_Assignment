@@ -42,3 +42,4 @@ public class CandidatePatchDto {
     @Min(value = 0, message = "Notice period cannot be negative")
     private Integer noticePeriodInDays;
 }
+

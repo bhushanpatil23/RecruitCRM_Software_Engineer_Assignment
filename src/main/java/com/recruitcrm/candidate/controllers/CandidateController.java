@@ -2,6 +2,7 @@ package com.recruitcrm.candidate.controllers;
 
 import com.recruitcrm.candidate.dtos.CandidateRequestDto;
 import com.recruitcrm.candidate.dtos.CandidateResponseDto;
+import com.recruitcrm.candidate.dtos.CandidateSearchDto;
 import com.recruitcrm.candidate.services.CandidateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,15 @@ public class CandidateController {
     @Operation(summary = "Get all candidates")
     public ResponseEntity<List<CandidateResponseDto>> getAllCandidates() {
         List<CandidateResponseDto> candidates = candidateService.getAllCandidates();
+        return ResponseEntity.ok(candidates);
+    }
+
+    @GetMapping("/filter")
+    @Operation(summary = "Filter candidates using optional criteria")
+    public ResponseEntity<List<CandidateResponseDto>> filterCandidates(
+            @Valid @ModelAttribute CandidateSearchDto searchDto) {
+
+        List<CandidateResponseDto> candidates = candidateService.filterCandidates(searchDto);
         return ResponseEntity.ok(candidates);
     }
 
