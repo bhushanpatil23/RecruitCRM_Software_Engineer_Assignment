@@ -7,14 +7,14 @@ import com.recruitcrm.candidate.dtos.CandidateSearchDto;
 import com.recruitcrm.candidate.entities.Candidate;
 import com.recruitcrm.candidate.repositories.CandidateRepository;
 import com.recruitcrm.candidate.repositories.CandidateSpecifications;
+import com.recruitcrm.candidate.exceptions.BadRequestException;
+import com.recruitcrm.candidate.exceptions.CandidateNotFoundException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.util.ReflectionUtils;
 import org.springframework.stereotype.Service;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.beans.SimpleTypeConverter;
 import org.springframework.data.jpa.domain.Specification;
 import java.lang.reflect.Field;
@@ -47,16 +47,14 @@ public class CandidateService {
 
     public CandidateResponseDto getCandidateById(Long id) {
         Candidate candidate = candidateRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Candidate not found with id: " + id));
+                .orElseThrow(() -> new CandidateNotFoundException(id));
 
         return mapper.map(candidate, CandidateResponseDto.class);
     }
 
     public CandidateResponseDto updateCandidate(Long id, CandidateRequestDto candidateRequestDto) {
         Candidate candidate = candidateRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Candidate not found with id: " + id));
+                .orElseThrow(() -> new CandidateNotFoundException(id));
 
         mapper.map(candidateRequestDto, candidate);
         Candidate updatedCandidate = candidateRepository.save(candidate);
@@ -66,8 +64,7 @@ public class CandidateService {
 
     public void deleteCandidate(Long id) {
         Candidate candidate = candidateRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Candidate not found with id: " + id));
+                .orElseThrow(() -> new CandidateNotFoundException(id));
 
         candidateRepository.delete(candidate);
     }
@@ -81,13 +78,12 @@ public class CandidateService {
     public CandidateResponseDto updateCandidatePartially(Long id, Map<String, Object> updates) {
 
         if (updates == null || updates.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Patch fields cannot be empty");
+            throw new BadRequestException("Patch fields cannot be empty");
         }
 
         for (String fieldName : updates.keySet()) {
             if (!PATCHABLE_FIELDS.contains(fieldName)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Field cannot be updated: " + fieldName);
+                throw new BadRequestException("Field cannot be updated: " + fieldName);
             }
         }
 
@@ -103,12 +99,11 @@ public class CandidateService {
                     .map(entry -> entry.getKey() + ": " + entry.getValue())
                     .collect(Collectors.joining("; "));
 
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+            throw new BadRequestException(message);
         }
 
         Candidate candidate = candidateRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Candidate not found with id: " + id));
+                .orElseThrow(() -> new CandidateNotFoundException(id));
 
         SimpleTypeConverter typeConverter = new SimpleTypeConverter();
 
@@ -117,8 +112,7 @@ public class CandidateService {
             try {
                 fieldToBeUpdated = ReflectionUtils.getRequiredField(Candidate.class, fieldName);
             } catch (IllegalArgumentException exception) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Unknown candidate field: " + fieldName);
+                throw new BadRequestException("Unknown candidate field: " + fieldName);
             }
 
             fieldToBeUpdated.setAccessible(true);
@@ -129,8 +123,7 @@ public class CandidateService {
                         : typeConverter.convertIfNecessary(value, fieldToBeUpdated.getType());
                 ReflectionUtils.setField(fieldToBeUpdated, candidate, convertedValue);
             } catch (RuntimeException exception) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Invalid value for field: " + fieldName);
+                throw new BadRequestException("Invalid value for field: " + fieldName);
             }
         });
 
@@ -144,15 +137,13 @@ public class CandidateService {
         if (searchDto.getExperienceMin() != null
                 && searchDto.getExperienceMax() != null
                 && searchDto.getExperienceMin() > searchDto.getExperienceMax()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "experienceMin cannot be greater than experienceMax");
+            throw new BadRequestException("experienceMin cannot be greater than experienceMax");
         }
 
         if (searchDto.getSalaryMin() != null
                 && searchDto.getSalaryMax() != null
                 && searchDto.getSalaryMin() > searchDto.getSalaryMax()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "salaryMin cannot be greater than salaryMax");
+            throw new BadRequestException("salaryMin cannot be greater than salaryMax");
         }
 
 
