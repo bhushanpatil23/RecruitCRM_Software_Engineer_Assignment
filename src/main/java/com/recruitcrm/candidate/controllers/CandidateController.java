@@ -7,44 +7,62 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/candidates")
 @RequiredArgsConstructor
+@Tag(name = "Candidates", description = "Candidate management APIs")
 public class CandidateController {
 
     private final CandidateService candidateService;
 
     @PostMapping("/create")
-    public ResponseEntity<CandidateResponseDto> createCandidate(@RequestBody CandidateRequestDto candidateRequestDto) {
+    @Operation(summary = "Create a candidate")
+    public ResponseEntity<CandidateResponseDto> createCandidate(@Valid @RequestBody CandidateRequestDto candidateRequestDto) {
         CandidateResponseDto candidateResponseDto = candidateService.createCandidate(candidateRequestDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(candidateResponseDto);
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Get a candidate by ID")
     public ResponseEntity<CandidateResponseDto> getCandidateById(@PathVariable Long id) {
-        // Logic to get a candidate by id call service layer and return the response
-        return ResponseEntity.noContent().build();
+        CandidateResponseDto candidateResponseDto = candidateService.getCandidateById(id);
+        return ResponseEntity.ok(candidateResponseDto);
     }
 
     @GetMapping("/all")
+    @Operation(summary = "Get all candidates")
     public ResponseEntity<List<CandidateResponseDto>> getAllCandidates() {
-        // Logic to get all candidates call service layer and return the response
-        return ResponseEntity.noContent().build();
+        List<CandidateResponseDto> candidates = candidateService.getAllCandidates();
+        return ResponseEntity.ok(candidates);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<CandidateResponseDto> updateCandidate(@PathVariable Long id, @RequestBody CandidateRequestDto candidateRequestDto) {
-        // Logic to update a candidate by id call service layer and return the response
-        return ResponseEntity.noContent().build();
+    @Operation(summary = "Update a candidate")
+    public ResponseEntity<CandidateResponseDto> updateCandidate(@PathVariable Long id, @Valid @RequestBody CandidateRequestDto candidateRequestDto) {
+        CandidateResponseDto candidateResponseDto = candidateService.updateCandidate(id, candidateRequestDto);
+        return ResponseEntity.ok(candidateResponseDto);
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a candidate")
     public ResponseEntity<Void> deleteCandidate(@PathVariable Long id) {
-        // Logic to delete a candidate by id call service layer and return the response
+        candidateService.deleteCandidate(id);
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/{id}")
+    @Operation(summary = "Update candiata data")
+    public ResponseEntity<CandidateResponseDto> updateCandidatePartially(@PathVariable Long id, @RequestBody Map<String,Object> updates){
+
+        CandidateResponseDto candidateResponseDto = candidateService.updateCandidatePartially(id,updates);
+
+        return ResponseEntity.ok(candidateResponseDto);
+    }
 }
