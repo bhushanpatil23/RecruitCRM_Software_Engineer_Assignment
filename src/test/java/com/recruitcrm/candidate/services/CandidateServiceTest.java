@@ -7,6 +7,7 @@ import com.recruitcrm.candidate.dtos.CandidatePatchDto;
 import com.recruitcrm.candidate.entities.Candidate;
 import com.recruitcrm.candidate.exceptions.BadRequestException;
 import com.recruitcrm.candidate.exceptions.CandidateNotFoundException;
+import com.recruitcrm.candidate.exceptions.DuplicateCandidateException;
 import com.recruitcrm.candidate.repositories.CandidateRepository;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +65,19 @@ class CandidateServiceTest {
 
         assertEquals("Aarav", result.getFirstName());
         verify(candidateRepository).save(candidate);
+    }
+
+    @Test
+    void createCandidate_whenEmailAlreadyExists_shouldThrowDuplicateCandidateException() {
+        CandidateRequestDto request = new CandidateRequestDto();
+        request.setEmail("existing@example.com");
+
+        when(candidateRepository.existsByEmailIgnoreCase("existing@example.com")).thenReturn(true);
+
+        assertThrows(DuplicateCandidateException.class,
+                () -> candidateService.createCandidate(request));
+
+        verify(candidateRepository, never()).save(any(Candidate.class));
     }
 
     @Test
@@ -143,6 +157,23 @@ class CandidateServiceTest {
 
         assertEquals("New Name", result.getFirstName());
         verify(candidateRepository).save(candidate);
+    }
+
+    @Test
+    void updateCandidate_whenEmailBelongsToAnotherCandidate_shouldThrowDuplicateCandidateException() {
+        Candidate candidate = new Candidate();
+        candidate.setId(1L);
+
+        CandidateRequestDto request = new CandidateRequestDto();
+        request.setEmail("existing@example.com");
+
+        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
+        when(candidateRepository.existsByEmailIgnoreCaseAndIdNot("existing@example.com", 1L)).thenReturn(true);
+
+        assertThrows(DuplicateCandidateException.class,
+                () -> candidateService.updateCandidate(1L, request));
+
+        verify(candidateRepository, never()).save(any(Candidate.class));
     }
 
     @Test
@@ -256,4 +287,3 @@ class CandidateServiceTest {
         verify(candidateRepository).findAll(any(Specification.class));
     }
 }
-

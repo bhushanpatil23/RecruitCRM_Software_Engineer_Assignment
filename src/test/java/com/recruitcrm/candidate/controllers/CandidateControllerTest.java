@@ -10,6 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -36,7 +41,9 @@ class CandidateControllerTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         CandidateController controller = new CandidateController(candidateService);
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
+                .build();
     }
 
     private CandidateRequestDto validRequest() {
@@ -84,11 +91,22 @@ class CandidateControllerTest {
         CandidateResponseDto candidate = new CandidateResponseDto();
         candidate.setFirstName("Priya");
 
-        when(candidateService.getAllCandidates()).thenReturn(List.of(candidate));
+        when(candidateService.getAllCandidates(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(candidate),
+                        PageRequest.of(0, 20, Sort.by("id")), 1));
 
-        mockMvc.perform(get("/candidates/all"))
+        mockMvc.perform(get("/candidates/all")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .param("sort", "firstName,asc"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].firstName").value("Priya"));
+                .andExpect(jsonPath("$.content[0].firstName").value("Priya"));
+
+        verify(candidateService).getAllCandidates(argThat(pageable ->
+                pageable.getPageNumber() == 0
+                        && pageable.getPageSize() == 10
+                        && pageable.getSort().getOrderFor("firstName") != null
+                        && pageable.getSort().getOrderFor("firstName").isAscending()));
     }
 
     @Test
@@ -153,19 +171,28 @@ class CandidateControllerTest {
         CandidateResponseDto candidate = new CandidateResponseDto();
         candidate.setFirstName("Neha");
 
-        when(candidateService.filterCandidates(any())).thenReturn(List.of(candidate));
+        when(candidateService.filterCandidates(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(candidate),
+                        PageRequest.of(0, 20, Sort.by("id")), 1));
 
         mockMvc.perform(get("/candidates/filter")
                         .param("skills", "Python")
                         .param("experienceMin", "5")
-                        .param("experienceMax", "8"))
+                        .param("experienceMax", "8")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .param("sort", "experience,desc"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].firstName").value("Neha"));
+                .andExpect(jsonPath("$.content[0].firstName").value("Neha"));
 
-        verify(candidateService).filterCandidates(argThat(search ->
-                "Python".equals(search.getSkills())
+        verify(candidateService).filterCandidates(
+                argThat(search -> "Python".equals(search.getSkills())
                         && search.getExperienceMin() == 5.0
-                        && search.getExperienceMax() == 8.0));
+                        && search.getExperienceMax() == 8.0),
+                argThat(pageable ->
+                        pageable.getPageNumber() == 0
+                                && pageable.getPageSize() == 10
+                                && pageable.getSort().getOrderFor("experience") != null
+                                && pageable.getSort().getOrderFor("experience").isDescending()));
     }
 }
-

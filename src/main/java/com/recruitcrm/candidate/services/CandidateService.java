@@ -9,6 +9,7 @@ import com.recruitcrm.candidate.repositories.CandidateRepository;
 import com.recruitcrm.candidate.repositories.CandidateSpecifications;
 import com.recruitcrm.candidate.exceptions.BadRequestException;
 import com.recruitcrm.candidate.exceptions.CandidateNotFoundException;
+import com.recruitcrm.candidate.exceptions.DuplicateCandidateException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,9 @@ import org.springframework.data.util.ReflectionUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.SimpleTypeConverter;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +42,14 @@ public class CandidateService {
             "noticePeriodInDays"
     );
 
+    private static final Set<String> SORTABLE_FIELDS = Set.of(
+            "id", "firstName", "lastName", "email", "experience",
+            "currentCompany", "currentLocation", "preferredLocation",
+            "expectedSalary", "noticePeriodInDays", "createdAt", "updatedAt"
+    );
+
     public CandidateResponseDto createCandidate(CandidateRequestDto candidateRequestDto) {
+        validateEmailNotUsed(candidateRequestDto.getEmail(), null);
 
         Candidate candidate = mapper.map(candidateRequestDto, Candidate.class);
         Candidate savedCandidate = candidateRepository.save(candidate);
@@ -56,6 +67,8 @@ public class CandidateService {
         Candidate candidate = candidateRepository.findById(id)
                 .orElseThrow(() -> new CandidateNotFoundException(id));
 
+        validateEmailNotUsed(candidateRequestDto.getEmail(), id);
+
         mapper.map(candidateRequestDto, candidate);
         Candidate updatedCandidate = candidateRepository.save(candidate);
 
@@ -67,6 +80,12 @@ public class CandidateService {
                 .orElseThrow(() -> new CandidateNotFoundException(id));
 
         candidateRepository.delete(candidate);
+    }
+
+    public Page<CandidateResponseDto> getAllCandidates(Pageable pageable) {
+        validatePageable(pageable);
+        return candidateRepository.findAll(pageable)
+                .map(candidate -> mapper.map(candidate, CandidateResponseDto.class));
     }
 
     public List<CandidateResponseDto> getAllCandidates() {
@@ -105,6 +124,10 @@ public class CandidateService {
         Candidate candidate = candidateRepository.findById(id)
                 .orElseThrow(() -> new CandidateNotFoundException(id));
 
+        if (patchDto.getEmail() != null) {
+            validateEmailNotUsed(patchDto.getEmail(), id);
+        }
+
         SimpleTypeConverter typeConverter = new SimpleTypeConverter();
 
         updates.forEach((fieldName, value) -> {
@@ -132,7 +155,8 @@ public class CandidateService {
         return mapper.map(updatedCandidate, CandidateResponseDto.class);
     }
 
-    public List<CandidateResponseDto> filterCandidates(CandidateSearchDto searchDto) {
+    public Page<CandidateResponseDto> filterCandidates(CandidateSearchDto searchDto, Pageable pageable) {
+        validatePageable(pageable);
 
         if (searchDto.getExperienceMin() != null
                 && searchDto.getExperienceMax() != null
@@ -146,6 +170,27 @@ public class CandidateService {
             throw new BadRequestException("salaryMin cannot be greater than salaryMax");
         }
 
+        Specification<Candidate> specification = Specification
+                .<Candidate>unrestricted()
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getFirstName(), "firstName"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getLastName(), "lastName"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getEmail(), "email"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getSkills(), "skills"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getCurrentCompany(), "currentCompany"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getCurrentLocation(), "currentLocation"))
+                .and(CandidateSpecifications.containsIgnoreCase(searchDto.getPreferredLocation(), "preferredLocation"))
+                .and(CandidateSpecifications.hasExperienceGreaterThanOrEqualTo(searchDto.getExperienceMin()))
+                .and(CandidateSpecifications.hasExperienceLessThanOrEqualTo(searchDto.getExperienceMax()))
+                .and(CandidateSpecifications.hasExpectedSalaryGreaterThanOrEqualTo(searchDto.getSalaryMin()))
+                .and(CandidateSpecifications.hasExpectedSalaryLessThanOrEqualTo(searchDto.getSalaryMax()))
+                .and(CandidateSpecifications.hasNoticePeriodLessThanOrEqualTo(searchDto.getNoticePeriodMax()));
+
+        return candidateRepository.findAll(specification, pageable)
+                .map(candidate -> mapper.map(candidate, CandidateResponseDto.class));
+    }
+
+    public List<CandidateResponseDto> filterCandidates(CandidateSearchDto searchDto) {
+        validateFilterRanges(searchDto);
 
         Specification<Candidate> specification = Specification
                 .<Candidate>unrestricted()
@@ -165,6 +210,46 @@ public class CandidateService {
         return candidateRepository.findAll(specification).stream()
                 .map(candidate -> mapper.map(candidate, CandidateResponseDto.class))
                 .collect(Collectors.toList());
+    }
+
+    private void validateFilterRanges(CandidateSearchDto searchDto) {
+        if (searchDto.getExperienceMin() != null
+                && searchDto.getExperienceMax() != null
+                && searchDto.getExperienceMin() > searchDto.getExperienceMax()) {
+            throw new BadRequestException("experienceMin cannot be greater than experienceMax");
+        }
+
+        if (searchDto.getSalaryMin() != null
+                && searchDto.getSalaryMax() != null
+                && searchDto.getSalaryMin() > searchDto.getSalaryMax()) {
+            throw new BadRequestException("salaryMin cannot be greater than salaryMax");
+        }
+    }
+
+    private void validatePageable(Pageable pageable) {
+        if (pageable.getPageSize() < 1 || pageable.getPageSize() > 100) {
+            throw new BadRequestException("Page size must be between 1 and 100");
+        }
+
+        for (Sort.Order order : pageable.getSort()) {
+            if (!SORTABLE_FIELDS.contains(order.getProperty())) {
+                throw new BadRequestException("Cannot sort by field: " + order.getProperty());
+            }
+        }
+    }
+
+    private void validateEmailNotUsed(String email, Long candidateId) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        boolean duplicate = candidateId == null
+                ? candidateRepository.existsByEmailIgnoreCase(email.trim())
+                : candidateRepository.existsByEmailIgnoreCaseAndIdNot(email.trim(), candidateId);
+
+        if (duplicate) {
+            throw new DuplicateCandidateException(email.trim());
+        }
     }
 
 }

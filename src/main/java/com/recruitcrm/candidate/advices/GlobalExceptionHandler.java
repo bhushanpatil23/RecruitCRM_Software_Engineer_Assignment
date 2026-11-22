@@ -2,6 +2,7 @@ package com.recruitcrm.candidate.advices;
 
 import com.recruitcrm.candidate.exceptions.BadRequestException;
 import com.recruitcrm.candidate.exceptions.ResourceNotFoundException;
+import com.recruitcrm.candidate.exceptions.DuplicateCandidateException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleBadRequest(BadRequestException exception) {
         ApiError apiError = ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST)
+                .message(exception.getMessage())
+                .build();
+        return buildErrorResponse(apiError);
+    }
+
+    @ExceptionHandler(DuplicateCandidateException.class)
+    public ResponseEntity<ApiResponse<?>> handleDuplicateCandidate(DuplicateCandidateException exception) {
+        ApiError apiError = ApiError.builder()
+                .status(HttpStatus.CONFLICT)
                 .message(exception.getMessage())
                 .build();
         return buildErrorResponse(apiError);

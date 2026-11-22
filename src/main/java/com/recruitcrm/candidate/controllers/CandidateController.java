@@ -11,8 +11,9 @@ import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import java.util.Map;
 
 @RestController
@@ -38,19 +39,18 @@ public class CandidateController {
     }
 
     @GetMapping("/all")
-    @Operation(summary = "Get all candidates")
-    public ResponseEntity<List<CandidateResponseDto>> getAllCandidates() {
-        List<CandidateResponseDto> candidates = candidateService.getAllCandidates();
-        return ResponseEntity.ok(candidates);
+    @Operation(summary = "Get all candidates with pagination and sorting")
+    public ResponseEntity<Page<CandidateResponseDto>> getAllCandidates(
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        return ResponseEntity.ok(candidateService.getAllCandidates(pageable));
     }
 
     @GetMapping("/filter")
-    @Operation(summary = "Filter candidates using optional criteria")
-    public ResponseEntity<List<CandidateResponseDto>> filterCandidates(
-            @Valid @ModelAttribute CandidateSearchDto searchDto) {
-
-        List<CandidateResponseDto> candidates = candidateService.filterCandidates(searchDto);
-        return ResponseEntity.ok(candidates);
+    @Operation(summary = "Filter candidates using optional criteria with pagination")
+    public ResponseEntity<Page<CandidateResponseDto>> filterCandidates(
+            @Valid @ModelAttribute CandidateSearchDto searchDto,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable) {
+        return ResponseEntity.ok(candidateService.filterCandidates(searchDto, pageable));
     }
 
     @PutMapping("/{id}")
@@ -68,7 +68,7 @@ public class CandidateController {
     }
 
     @PatchMapping("/{id}")
-    @Operation(summary = "Update candiata data")
+    @Operation(summary = "Update candidate fields partially")
     public ResponseEntity<CandidateResponseDto> updateCandidatePartially(@PathVariable Long id, @RequestBody Map<String,Object> updates){
 
         CandidateResponseDto candidateResponseDto = candidateService.updateCandidatePartially(id,updates);
